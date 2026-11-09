@@ -60,15 +60,19 @@ If iOS limits get in the way, the same code can be wrapped as a native app later
 
 ## Build order
 
-1. Keyboard mode: touch handling, prediction, speech. Usable on its own.
+1. Keyboard mode: touch handling, prediction, speech. Usable on its own. **Done.**
 2. Handwriting capture and enrolment screens.
 3. Offline handwriting recognition from her samples.
 4. Cloud sync and family editing.
 5. Claude-assisted recognition for unenrolled words.
 6. Chinese.
 
+## Decided
+
+- Keyboard layout: alphabetical (A–Z).
+- Vocabulary: common English words plus family names.
+- Voice: the standard iPhone voice for now.
+
 ## Still open
 
-- Keyboard layout: QWERTY (if she typed before) or alphabetical?
-- Her familiar words for enrolment.
-- Voice: a standard voice, or one cloned from recordings of her.
+- Her familiar words for handwriting enrolment.
