@@ -21,24 +21,14 @@ a phrase, a symbol or typed text and the device speaks it.
 - **Her data is private.** The repo is private; no analytics, no third-party
   trackers.
 
-## Open questions (ask XW before building the affected part)
+## The spec
 
-1. How does she communicate now: can she read and type, or does she need
-   pictures/symbols? What is the cause (stroke, ALS/MND, Parkinson's, other)?
-2. How does she use a screen: accurate taps, large targets only, a switch, or
-   eye-gaze?
-3. Which device: iPad, Android tablet, phone?
-4. Languages: English only, or Mandarin / a dialect (Hokkien, Cantonese,
-   Teochew)?
-5. Voice: a standard text-to-speech voice, or a clone of her own voice from
-   recordings?
-6. Who edits her boards, and from where?
+**`docs/spec.md` is the source of truth** for who she is, the two modes
+(big keyboard with prediction; handwriting that learns her writing), the build
+order and the questions still open. Read it before building anything.
 
-## Proposed default (until the answers change it)
-
-An installable web app (PWA) that runs on any tablet: large customisable phrase
-and symbol boards, type-to-speak, offline after first load, boards synced
-through a cloud backend so family can edit remotely.
+In short: she has lost dexterity, uses an iPad or iPhone with her finger, aims
+imprecisely and sometimes taps more than once. English first, Chinese later.
 
 ## Working rules
 
