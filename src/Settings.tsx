@@ -1,29 +1,41 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
+import type { SyncStatus } from "./App";
 import { speak } from "./speech";
 import { TARGET } from "./handwriting/Enrol";
-import type { Samples } from "./handwriting/samples";
 import type { Saved, Settings as SettingsT } from "./store";
 
 interface Props {
   saved: Saved;
   setSaved: Dispatch<SetStateAction<Saved>>;
-  samples: Samples;
+  counts: Record<string, number>;
+  unlabelled: number;
   hwWords: { word: string; label: string }[];
   storageFull: boolean;
+  cloudConfigured: boolean;
+  sync: SyncStatus;
+  onSignIn: (email: string, password: string) => Promise<string | null>;
+  onSignOut: () => void;
+  onSyncNow: () => void;
   onTeach: () => void;
+  onLabel: () => void;
   onResetHandwriting: () => void;
   onClose: () => void;
 }
 
 /** For family, not for Mum: opened by pressing and holding the gear. */
-export function Settings({ saved, setSaved, samples, hwWords, storageFull, onTeach, onResetHandwriting, onClose }: Props) {
+export function Settings(props: Props) {
+  const { saved, setSaved, counts, unlabelled, hwWords, storageFull, sync, onTeach, onLabel, onResetHandwriting, onClose } = props;
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const s = saved.settings;
   const set = (patch: Partial<SettingsT>) => setSaved((p) => ({ ...p, settings: { ...p.settings, ...patch } }));
   const learnedTaps = Object.values(saved.touch)
     .flatMap((m) => Object.values(m))
     .reduce((n, k) => n + k.n, 0);
-  const taught = hwWords.filter((w) => (samples[w.word]?.length ?? 0) >= TARGET).length;
-  const sampleCount = Object.values(samples).reduce((n, l) => n + l.length, 0);
+  const taught = hwWords.filter((w) => (counts[w.word] ?? 0) >= TARGET).length;
+  const sampleCount = Object.values(counts).reduce((n, c) => n + c, 0);
 
   return (
     <div className="settings-backdrop">
@@ -95,15 +107,72 @@ export function Settings({ saved, setSaved, samples, hwWords, storageFull, onTea
           <button type="button" className="secondary primary" onClick={onTeach}>
             Teach handwriting
           </button>
+          <button type="button" className="secondary" onClick={onLabel}>
+            Label unread scribbles ({unlabelled})
+          </button>
           <button
             type="button"
             className="secondary danger"
             onClick={() => {
-              if (confirm("Delete all of her handwriting samples?")) onResetHandwriting();
+              if (
+                confirm(
+                  sync.email
+                    ? "Delete all of her handwriting samples, on every device and in the cloud backup?"
+                    : "Delete all of her handwriting samples?",
+                )
+              )
+                onResetHandwriting();
             }}
           >
             Reset handwriting
           </button>
+        </div>
+
+        <div className="learned">
+          <span>
+            <b>Cloud backup</b>
+          </span>
+          {!props.cloudConfigured ? (
+            <small>Not set up for this app yet. Everything is stored on this device only.</small>
+          ) : sync.email ? (
+            <>
+              <span>
+                Signed in as {sync.email}.{" "}
+                {sync.error ? (
+                  <span className="danger">Last sync failed: {sync.error}</span>
+                ) : sync.at ? (
+                  `Last synced ${new Date(sync.at).toLocaleTimeString()}.`
+                ) : (
+                  "Not synced yet."
+                )}
+              </span>
+              <button type="button" className="secondary" onClick={props.onSyncNow}>
+                Sync now
+              </button>
+              <button type="button" className="secondary" onClick={props.onSignOut}>
+                Sign out
+              </button>
+            </>
+          ) : (
+            <>
+              <small>Sign in with the family login to back up and share her data across devices.</small>
+              <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoCapitalize="none" />
+              <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              {signInError && <span className="danger">{signInError}</span>}
+              <button
+                type="button"
+                className="secondary primary"
+                disabled={busy || !email || !password}
+                onClick={async () => {
+                  setBusy(true);
+                  setSignInError(await props.onSignIn(email.trim(), password));
+                  setBusy(false);
+                }}
+              >
+                Sign in
+              </button>
+            </>
+          )}
         </div>
 
         <div className="learned">

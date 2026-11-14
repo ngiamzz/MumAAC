@@ -20,12 +20,32 @@ sample. Matching runs on the device against her own samples only.
 Settings for family: press and hold the gear (repeat-tap window, speaking
 speed, family names, handwriting words, teaching, reset learning).
 
+**Cloud backup**: with the family login signed in (settings), her handwriting
+samples, keyboard learning and word lists are copied to a private Supabase
+database and shared across devices. The device copy stays the working copy, so
+everything still works offline. Scribbles the app could not read are kept, and
+family can label them from any signed-in device (settings → Label unread
+scribbles).
+
+## Cloud backup setup (once)
+
+1. Create a Supabase project. Under Authentication → Users, add one user: the
+   family login (email + password, "Auto Confirm User" on).
+2. In the SQL editor, run `docs/sql/01_cloud_backup.sql`. It should end by
+   reporting 1 family login with access.
+3. Give the app the project's URL and publishable key as `VITE_SUPABASE_URL`
+   and `VITE_SUPABASE_KEY` (Vercel → Settings → Environment Variables, or
+   `.env.local` for development; see `.env.example`), then redeploy.
+4. On each device: press and hold the gear, sign in under Cloud backup.
+
+Never put the secret/service key or the database password in the app.
+
 ## Develop
 
 ```bash
 npm install
 npm run dev      # http://localhost:5173
-npm test         # unit tests: keyboard decoding and learning, handwriting matching
+npm test         # unit tests: keyboard, handwriting matching, sync merging
 npm run build    # typecheck + production build into dist/
 ```
 
