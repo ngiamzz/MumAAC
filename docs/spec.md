@@ -61,8 +61,8 @@ If iOS limits get in the way, the same code can be wrapped as a native app later
 ## Build order
 
 1. Keyboard mode: touch handling, prediction, speech. Usable on its own. **Done.**
-2. Handwriting capture and enrolment screens.
-3. Offline handwriting recognition from her samples.
+2. Handwriting capture and enrolment screens. **Done.**
+3. Offline handwriting recognition from her samples. **Done; untested on her real writing.**
 4. Cloud sync and family editing.
 5. Claude-assisted recognition for unenrolled words.
 6. Chinese.
@@ -73,6 +73,13 @@ If iOS limits get in the way, the same code can be wrapped as a native app later
 - Vocabulary: common English words plus family names.
 - Voice: the standard iPhone voice for now.
 
+- Handwriting words: the family names plus a starter list of care words,
+  editable in settings. Three samples of each word counts as taught.
+- A scribble no guess matched ("None of these") opens the keyboard; the word
+  she then picks is saved as that scribble's label.
+
 ## Still open
 
-- Her familiar words for handwriting enrolment.
+- How well shape matching holds up on her real writing. If it is weak, the
+  options are more samples per word or the Claude-assisted step.
+- Handwriting samples live only on her device until cloud sync is built.

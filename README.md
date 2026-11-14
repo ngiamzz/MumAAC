@@ -12,15 +12,20 @@ taps, family names offered first, the device's own voice, and it works
 offline once installed. It learns where she actually lands on each key from
 the words she picks.
 
+**Handwriting mode**: family teaches it by having her write each familiar
+word three times (settings → Teach handwriting). After that she writes a word,
+it offers its closest guesses, and each guess she picks becomes another
+sample. Matching runs on the device against her own samples only.
+
 Settings for family: press and hold the gear (repeat-tap window, speaking
-speed, family names, reset learning).
+speed, family names, handwriting words, teaching, reset learning).
 
 ## Develop
 
 ```bash
 npm install
 npm run dev      # http://localhost:5173
-npm test         # unit tests for decoding, touch learning, repeat filter
+npm test         # unit tests: keyboard decoding and learning, handwriting matching
 npm run build    # typecheck + production build into dist/
 ```
 

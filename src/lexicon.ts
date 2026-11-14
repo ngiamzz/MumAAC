@@ -24,3 +24,16 @@ export function buildLexicon(extraWords: string): { entries: Entry[]; display: M
   const entries = [...byWord].map(([word, zipf]) => ({ word, zipf }));
   return { entries, display };
 }
+
+/** The words she is taught to write: family names plus the handwriting list. */
+export function handwritingWords(extraWords: string, hwWords: string): { word: string; label: string }[] {
+  const seen = new Set<string>();
+  const out: { word: string; label: string }[] = [];
+  for (const label of [...parseExtraWords(extraWords), ...parseExtraWords(hwWords)]) {
+    const word = label.toLowerCase();
+    if (seen.has(word)) continue;
+    seen.add(word);
+    out.push({ word, label });
+  }
+  return out;
+}
