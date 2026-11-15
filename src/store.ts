@@ -22,8 +22,8 @@ const KEY = "mumaac:v1";
 export const DEFAULT_SETTINGS: Settings = {
   repeatWindowMs: 400,
   speechRate: 0.9,
-  extraWords: "Xinwei, Dom, Daniel, Danny, Ben, Jasi",
-  handwritingWords: "yes, no, water, toilet, pain, tired, hungry, cold, hot, help, thanks, sleep, medicine, home",
+  extraWords: "Dan, Ben, Jasi, Dom",
+  handwritingWords: "has, must, school, eat, sleep, yes, no, go, home, out, tired, hungry, can, see",
 };
 
 export function load(): Saved {
