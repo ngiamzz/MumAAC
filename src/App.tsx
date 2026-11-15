@@ -5,11 +5,31 @@ import { learn, type LetterTap } from "./keyboard/touchModel";
 import { Enrol } from "./handwriting/Enrol";
 import { Pad } from "./handwriting/Pad";
 import { recognise, type Stroke } from "./handwriting/recognise";
-import { addSample, loadSamples, saveSamples, toTemplates, type Samples } from "./handwriting/samples";
+import { LabelScribbles } from "./handwriting/LabelScribbles";
+import {
+  counts,
+  deleteSamples,
+  labelSample,
+  live,
+  loadSamples,
+  newSample,
+  saveSamples,
+  toTemplates,
+  trim,
+  type Sample,
+} from "./handwriting/samples";
 import { buildLexicon, handwritingWords, parseExtraWords } from "./lexicon";
 import { speak } from "./speech";
 import { load, save, type Saved } from "./store";
 import { Settings } from "./Settings";
+import { cloud, fetchProfile, forgetCursor, pullSamples, pushProfile, pushSamples } from "./sync";
+import { markSynced, mergeRemote } from "./syncMerge";
+
+export interface SyncStatus {
+  email: string | null; // signed-in family login, if any
+  at: number | null; // last successful sync
+  error: string | null; // why the last sync failed
+}
 
 interface Typed {
   tap: LetterTap;
@@ -19,17 +39,24 @@ interface Typed {
 const LEARN_MIN_LL = -6; // ignore taps too far from the letter to be informative
 
 export default function App() {
-  const [saved, setSaved] = useState<Saved>(load);
-  const [samples, setSamples] = useState<Samples>(loadSamples);
+  const [saved, setSavedRaw] = useState<Saved>(load);
+  const [samples, setSamplesRaw] = useState<Sample[]>(loadSamples);
+  const [sync, setSync] = useState<SyncStatus>({ email: null, at: null, error: null });
+  const signedIn = sync.email !== null;
+  // Every change to settings or learning is stamped, so sync knows which copy is newer.
+  const setSaved: typeof setSavedRaw = (next) =>
+    setSavedRaw((p) => ({ ...(typeof next === "function" ? next(p) : next), updatedAt: Date.now() }));
+  const setSamples = (fn: (cur: Sample[]) => Sample[]) => setSamplesRaw((cur) => trim(fn(cur), signedIn));
   const [storageFull, setStorageFull] = useState(false);
   const [words, setWords] = useState<string[]>([]);
   const [taps, setTaps] = useState<Typed[]>([]);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
-  // A scribble none of the guesses matched: the next word she picks on the keyboard labels it.
-  const [unmatched, setUnmatched] = useState<Stroke[] | null>(null);
+  // Id of a scribble none of the guesses matched: the next word she picks on the keyboard labels it.
+  const [unmatched, setUnmatched] = useState<string | null>(null);
   const [cleared, setCleared] = useState<{ words: string[]; taps: Typed[] } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [teaching, setTeaching] = useState(false);
+  const [labelling, setLabelling] = useState(false);
   const [wide, setWide] = useState(() => window.innerWidth >= 700);
   const textRef = useRef<HTMLDivElement>(null);
 
@@ -46,12 +73,106 @@ export default function App() {
     return () => clearTimeout(t);
   }, [cleared]);
 
+  // Cloud sync. The device copy is always the working copy; this only copies changes both ways.
+  const samplesRef = useRef(samples);
+  samplesRef.current = samples;
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
+  const syncing = useRef(false);
+  const profileSyncedAt = useRef(-1);
+
+  const runSync = async () => {
+    if (!cloud || syncing.current) return;
+    syncing.current = true;
+    try {
+      const pending = samplesRef.current.filter((s) => !s.synced);
+      if (pending.length) {
+        await pushSamples(pending);
+        setSamplesRaw((cur) => markSynced(cur, pending));
+      }
+      const { rows, done } = await pullSamples();
+      if (rows.length) setSamplesRaw((cur) => trim(mergeRemote(cur, rows), true));
+      done();
+
+      const remote = await fetchProfile();
+      const local = savedRef.current;
+      if (remote && remote.client_updated_at > local.updatedAt) {
+        setSavedRaw((p) =>
+          p.updatedAt >= remote.client_updated_at ? p : { ...p, ...remote.data, updatedAt: remote.client_updated_at },
+        );
+        profileSyncedAt.current = remote.client_updated_at;
+      } else {
+        if (local.updatedAt > (remote?.client_updated_at ?? 0)) await pushProfile(local);
+        profileSyncedAt.current = local.updatedAt;
+      }
+      setSync((s) => ({ ...s, at: Date.now(), error: null }));
+    } catch (e) {
+      setSync((s) => ({ ...s, error: e instanceof Error ? e.message : String(e) }));
+    } finally {
+      syncing.current = false;
+    }
+  };
+  const runSyncRef = useRef(runSync);
+  runSyncRef.current = runSync;
+
+  useEffect(() => {
+    if (!cloud) return;
+    cloud.auth.getSession().then(({ data }) => setSync((s) => ({ ...s, email: data.session?.user.email ?? null })));
+    const { data } = cloud.auth.onAuthStateChange((_event, session) =>
+      setSync((s) => ({ ...s, email: session?.user.email ?? null })),
+    );
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  // Sync when signed in, when the connection returns, and when the app comes back to the front.
+  useEffect(() => {
+    if (!signedIn) return;
+    const go = () => {
+      if (document.visibilityState === "visible") void runSyncRef.current();
+    };
+    go();
+    window.addEventListener("online", go);
+    document.addEventListener("visibilitychange", go);
+    return () => {
+      window.removeEventListener("online", go);
+      document.removeEventListener("visibilitychange", go);
+    };
+  }, [signedIn]);
+
+  // And a few seconds after anything changes here.
+  useEffect(() => {
+    if (!signedIn) return;
+    if (!samples.some((s) => !s.synced) && saved.updatedAt <= profileSyncedAt.current) return;
+    const t = setTimeout(() => void runSyncRef.current(), 4000);
+    return () => clearTimeout(t);
+  }, [signedIn, samples, saved.updatedAt]);
+
+  const signIn = async (email: string, password: string): Promise<string | null> => {
+    const { error } = await cloud!.auth.signInWithPassword({ email, password });
+    return error ? error.message : null;
+  };
+  const signOut = async () => {
+    await cloud!.auth.signOut();
+    forgetCursor();
+    setSync({ email: null, at: null, error: null });
+  };
+
   const mode = saved.mode;
-  const setMode = (m: Saved["mode"]) => setSaved((p) => ({ ...p, mode: m }));
+  const setMode = (m: Saved["mode"]) => setSavedRaw((p) => ({ ...p, mode: m }));
+  const addSample = (word: string | null, s: Stroke[]): string | null => {
+    const sample = newSample(word, s);
+    if (sample) setSamples((cur) => [...cur, sample]);
+    return sample?.id ?? null;
+  };
   const { extraWords, handwritingWords: hwText } = saved.settings;
   const { entries, display } = useMemo(() => buildLexicon(extraWords), [extraWords]);
   const hwWords = useMemo(() => handwritingWords(extraWords, hwText), [extraWords, hwText]);
   const templates = useMemo(() => toTemplates(samples), [samples]);
+  const sampleCounts = useMemo(() => counts(samples), [samples]);
+  const unlabelled = useMemo(
+    () => live(samples).filter((x) => x.word === null).sort((a, b) => b.at - a.at),
+    [samples],
+  );
   const show = (w: string) => display.get(w) ?? hwWords.find((h) => h.word === w)?.label ?? w;
   const limit = wide ? 4 : 3;
 
@@ -93,22 +214,23 @@ export default function App() {
     setWords((w) => [...w, show(s.word)]);
     setTaps([]);
     if (unmatched) {
-      // She told us what the scribble was: keep it as a sample and go back to writing.
-      setSamples((p) => addSample(p, s.word, unmatched));
+      // She told us what the scribble was: label it and go back to writing.
+      setSamples((cur) => labelSample(cur, unmatched, s.word));
       setUnmatched(null);
       setMode("write");
     }
   };
 
   const pickGuess = (word: string) => {
-    setSamples((p) => addSample(p, word, strokes));
+    addSample(word, strokes);
     countUse(word);
     setWords((w) => [...w, show(word)]);
     setStrokes([]);
   };
 
   const noneOfThese = () => {
-    setUnmatched(strokes);
+    // Kept unlabelled; if she does not name it now, family can label it later.
+    setUnmatched(addSample(null, strokes));
     setStrokes([]);
     setMode("keys");
   };
@@ -244,23 +366,41 @@ export default function App() {
         <Settings
           saved={saved}
           setSaved={setSaved}
-          samples={samples}
+          counts={sampleCounts}
+          unlabelled={unlabelled.length}
           hwWords={hwWords}
           storageFull={storageFull}
+          cloudConfigured={cloud !== null}
+          sync={sync}
+          onSignIn={signIn}
+          onSignOut={signOut}
+          onSyncNow={runSync}
           onTeach={() => {
             setSettingsOpen(false);
             setTeaching(true);
           }}
-          onResetHandwriting={() => setSamples({})}
+          onLabel={() => {
+            setSettingsOpen(false);
+            setLabelling(true);
+          }}
+          onResetHandwriting={() => setSamples((cur) => deleteSamples(cur, new Set(cur.map((x) => x.id)), signedIn))}
           onClose={() => setSettingsOpen(false)}
         />
       )}
       {teaching && (
         <Enrol
           words={hwWords}
-          samples={samples}
-          onSave={(word, s) => setSamples((p) => addSample(p, word, s))}
+          counts={sampleCounts}
+          onSave={addSample}
           onClose={() => setTeaching(false)}
+        />
+      )}
+      {labelling && (
+        <LabelScribbles
+          scribbles={unlabelled}
+          onLabel={(id, word) => setSamples((cur) => labelSample(cur, id, word))}
+          onDelete={(id) => setSamples((cur) => deleteSamples(cur, new Set([id]), signedIn))}
+          onClose={() => setLabelling(false)}
         />
       )}
     </main>

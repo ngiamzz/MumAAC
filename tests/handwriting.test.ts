@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { distance, featurize, recognise, type Stroke, type Template } from "../src/handwriting/recognise";
-import { addSample, toTemplates } from "../src/handwriting/samples";
+import { MAX_PER_WORD, counts, deleteSamples, labelSample, newSample, toTemplates, trim, type Sample } from "../src/handwriting/samples";
+import { markSynced, mergeRemote, toRow, type Row } from "../src/syncMerge";
 
 // Small seeded random generator so the tests are repeatable.
 function rng(seed: number) {
@@ -54,9 +55,9 @@ function write(word: string, seed: number, tremor = 0.06): Stroke[] {
 const WORDS = "yes no water toilet pain tired hungry cold hot help thanks sleep medicine home xinwei dom daniel danny ben jasi later waiter".split(" ");
 
 function teach(perWord: number): Template[] {
-  let samples = {};
+  const samples: Sample[] = [];
   WORDS.forEach((w, wi) => {
-    for (let k = 0; k < perWord; k++) samples = addSample(samples, w, write(w, wi * 100 + k));
+    for (let k = 0; k < perWord; k++) samples.push(newSample(w, write(w, wi * 100 + k))!);
   });
   return toTemplates(samples);
 }
@@ -91,9 +92,59 @@ describe("handwriting", () => {
     expect(top3 / n).toBeGreaterThan(0.95);
   });
 
-  it("keeps only the newest samples of a word", () => {
-    let samples = {};
-    for (let k = 0; k < 20; k++) samples = addSample(samples, "water", write("water", k));
-    expect((samples as Record<string, unknown[]>).water.length).toBe(12);
+  it("keeps only the newest samples of a word on the device", () => {
+    const samples = Array.from({ length: 20 }, (_, k) => ({ ...newSample("water", write("water", k))!, at: k }));
+    const kept = trim(samples, false);
+    expect(kept.length).toBe(MAX_PER_WORD);
+    expect(Math.min(...kept.map((s) => s.at))).toBe(20 - MAX_PER_WORD);
+  });
+
+  it("with cloud backup, never drops a sample that has not been uploaded", () => {
+    const samples = Array.from({ length: 20 }, (_, k) => ({ ...newSample("water", write("water", k))!, at: k }));
+    expect(trim(samples, true).length).toBe(20);
+    expect(trim(samples.map((s) => ({ ...s, synced: true })), true).length).toBe(MAX_PER_WORD);
+  });
+});
+
+describe("cloud sync merging", () => {
+  const mk = (word: string | null, seed = 1) => newSample(word, write("water", seed))!;
+  const row = (s: Sample, patch: Partial<Row> = {}): Row => ({ ...toRow(s, "other"), updated_at: "2026-01-01T00:00:00Z", ...patch });
+
+  it("marks uploaded samples, but not ones that changed during the upload", () => {
+    const a = mk("water");
+    const b = mk(null, 2);
+    const during = labelSample([a, b], b.id, "pain"); // b relabelled while the upload ran
+    const after = markSynced(during, [a, b]);
+    expect(after.find((s) => s.id === a.id)!.synced).toBe(true);
+    expect(after.find((s) => s.id === b.id)!.synced).toBe(false);
+  });
+
+  it("adds samples from another device and applies labels given there", () => {
+    const mine = { ...mk(null), synced: true };
+    const theirs = mk("home", 3);
+    const merged = mergeRemote([mine], [row(theirs), row(mine, { word: "tired" })]);
+    expect(counts(merged)).toEqual({ home: 1, tired: 1 });
+  });
+
+  it("keeps a local change that has not been uploaded yet", () => {
+    const mine = labelSample([{ ...mk(null), synced: true }], "x", "y");
+    const local = labelSample(mine, mine[0].id, "pain");
+    expect(mergeRemote(local, [row(local[0], { word: "wrong" })])[0].word).toBe("pain");
+  });
+
+  it("removes samples deleted on another device, and sends local deletions", () => {
+    const a = { ...mk("water"), synced: true };
+    expect(mergeRemote([a], [row(a, { deleted: true })])).toEqual([]);
+    const gone = deleteSamples([a], new Set([a.id]), true);
+    expect(counts(gone)).toEqual({});
+    expect(toRow(gone[0], "d")).toMatchObject({ deleted: true, strokes: [] });
+    expect(markSynced(gone, gone)).toEqual([]);
+  });
+
+  it("returns the same list when nothing changed, so sync does not loop", () => {
+    const a = { ...mk("water"), synced: true };
+    const list = [a];
+    expect(mergeRemote(list, [row(a)])).toBe(list);
+    expect(markSynced(list, [])).toBe(list);
   });
 });

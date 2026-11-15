@@ -354,3 +354,65 @@ button:disabled {
   color: var(--muted);
   font-size: 17px;
 }
+
+.settings input[type="email"],
+.settings input[type="password"],
+.label-row input {
+  font: inherit;
+  padding: 10px;
+  border-radius: 10px;
+  border: 2px solid var(--key-edge);
+  min-width: 0;
+}
+
+.labelling {
+  user-select: text;
+  -webkit-user-select: text;
+  overflow-y: auto;
+}
+
+.labelling ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.labelling li {
+  background: #fff;
+  border: 2px solid var(--key-edge);
+  border-radius: 16px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scribble {
+  width: 100%;
+  height: 140px;
+}
+
+.labelling small,
+.empty-note {
+  color: var(--muted);
+}
+
+.label-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+}
+
+.label-row button {
+  padding: 10px 14px;
+  background: var(--control);
+  font-weight: 600;
+}
+
+.label-row button.primary {
+  background: var(--accent);
+  color: var(--accent-text);
+}

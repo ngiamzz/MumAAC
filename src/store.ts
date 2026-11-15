@@ -13,7 +13,8 @@ export interface Saved {
   settings: Settings;
   touch: Record<string, TouchModel>; // keyed by column count: phone and tablet layouts differ
   usage: Record<string, number>; // how often she has used each word
-  mode: Mode; // the mode she last used
+  mode: Mode; // the mode she last used; per device, never synced
+  updatedAt: number; // when settings or learning last changed, for cloud sync
 }
 
 const KEY = "mumaac:v1";
@@ -26,7 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export function load(): Saved {
-  const empty: Saved = { settings: DEFAULT_SETTINGS, touch: {}, usage: {}, mode: "keys" };
+  const empty: Saved = { settings: DEFAULT_SETTINGS, touch: {}, usage: {}, mode: "keys", updatedAt: 0 };
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return empty;
@@ -36,6 +37,7 @@ export function load(): Saved {
       touch: s.touch ?? {},
       usage: s.usage ?? {},
       mode: s.mode === "write" ? "write" : "keys",
+      updatedAt: s.updatedAt ?? 0,
     };
   } catch {
     return empty;

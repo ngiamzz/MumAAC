@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
 import { Pad } from "./Pad";
 import type { Stroke } from "./recognise";
-import type { Samples } from "./samples";
 
 interface Props {
   words: { word: string; label: string }[];
-  samples: Samples;
+  counts: Record<string, number>;
   onSave: (word: string, strokes: Stroke[]) => void;
   onClose: () => void;
 }
@@ -13,10 +12,10 @@ interface Props {
 export const TARGET = 3; // samples of each word before it is considered taught
 
 /** Family sits with Mum: the screen shows a word, she writes it, family saves. */
-export function Enrol({ words, samples, onSave, onClose }: Props) {
+export function Enrol({ words, counts, onSave, onClose }: Props) {
   // Words with the fewest samples come first; the order is fixed when the screen opens.
   const queue = useMemo(
-    () => [...words].sort((a, b) => (samples[a.word]?.length ?? 0) - (samples[b.word]?.length ?? 0)),
+    () => [...words].sort((a, b) => (counts[a.word] ?? 0) - (counts[b.word] ?? 0)),
     [words],
   );
   const [i, setI] = useState(0);
@@ -33,8 +32,8 @@ export function Enrol({ words, samples, onSave, onClose }: Props) {
     );
 
   const cur = queue[i % queue.length];
-  const have = samples[cur.word]?.length ?? 0;
-  const taught = words.filter((w) => (samples[w.word]?.length ?? 0) >= TARGET).length;
+  const have = counts[cur.word] ?? 0;
+  const taught = words.filter((w) => (counts[w.word] ?? 0) >= TARGET).length;
   const next = () => {
     setStrokes([]);
     setI((n) => n + 1);
