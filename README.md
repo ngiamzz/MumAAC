@@ -33,9 +33,9 @@ scribbles).
    family login (email + password, "Auto Confirm User" on).
 2. In the SQL editor, run `docs/sql/01_cloud_backup.sql`. It should end by
    reporting 1 family login with access.
-3. Give the app the project's URL and publishable key as `VITE_SUPABASE_URL`
-   and `VITE_SUPABASE_KEY` (Vercel → Settings → Environment Variables, or
-   `.env.local` for development; see `.env.example`), then redeploy.
+3. Put the project's URL and publishable key in `.env.production` (committed;
+   both are public by design), so every Vercel build has them. For local
+   development copy them into `.env.local`.
 4. On each device: press and hold the gear, sign in under Cloud backup.
 
 Never put the secret/service key or the database password in the app.
